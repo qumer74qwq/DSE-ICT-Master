@@ -251,24 +251,40 @@ app.delete('/api/questions/:id', async (req, res) => {
   }
 });
 
-// --- 新增：获取所有题目 (仅限管理员) ---
-app.get('/api/admin/questions', async (req, res) => {
-  const { userId } = req.query;
+// 更新题目
+app.put('/api/questions/:id', async (req, res) => {
+  const { userId, question, options, correct, explanation, difficulty, moduleId } = req.body;
 
   try {
-    const user = await User.findById(userId);
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ message: '无权访问' });
-    }
+    const q = await Question.findById(req.params.id);
+    if (!q) return res.status(404).json({ message: '题目不存在' });
 
-    // 获取所有题目，按时间倒序
-    const questions = await Question.find().sort({ createdAt: -1 });
-    res.json(questions);
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const isOwner = q.createdBy && q.createdBy.toString() === userId;
+    const isAdmin = user.role === 'admin';
+
+    if (isAdmin || isOwner) {
+      q.question = question || q.question;
+      q.options = options || q.options;
+      if (correct !== undefined) q.correct = correct;
+      q.explanation = explanation || q.explanation;
+      q.difficulty = difficulty || q.difficulty;
+      q.moduleId = moduleId || q.moduleId;
+
+      await q.save();
+      res.json({ success: true, data: q });
+    } else {
+      res.status(403).json({ message: '无权修改此题目' });
+    }
   } catch (error) {
-    console.error('Fetch all questions error:', error);
-    res.status(500).json({ message: '获取题目失败' });
+    console.error('Update question error:', error);
+    res.status(500).json({ message: '修改失败' });
   }
 });
+
+
 
 // --- 用户行为 API ---
 // 记录用户行为 (合并修复版)
@@ -398,9 +414,11 @@ app.post('/api/register', async (req, res) => {
     // 初始化用户设置
     await new UserSetting({ userId: newUser._id }).save();
 
+    res.status(201).json({ success: true, message: '註冊成功' });
+
   } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ message: '图片上传失败' });
+    console.error('Register error:', error);
+    res.status(500).json({ message: '註冊失敗' });
   }
 });
 
@@ -576,6 +594,38 @@ app.delete('/api/knowledge/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete note error:', error);
     res.status(500).json({ message: '删除失败' });
+  }
+});
+
+// 更新笔记
+app.put('/api/knowledge/:id', async (req, res) => {
+  const { userId, title, content, tags, moduleId } = req.body;
+
+  try {
+    const note = await KnowledgePoint.findById(req.params.id);
+    if (!note) return res.status(404).json({ message: '笔记不存在' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: '用户不存在' });
+
+    const noteOwnerId = note.userId || note.author || note.createdBy;
+    const isOwner = noteOwnerId && noteOwnerId.toString() === userId;
+    const isAdmin = user.role === 'admin';
+
+    if (isAdmin || isOwner) {
+      note.title = title || note.title;
+      note.content = content || note.content;
+      note.tags = tags || note.tags;
+      note.moduleId = moduleId || note.moduleId;
+
+      await note.save();
+      res.json({ success: true, data: note });
+    } else {
+      res.status(403).json({ message: '无权修改此笔记' });
+    }
+  } catch (error) {
+    console.error('Update note error:', error);
+    res.status(500).json({ message: '修改失败' });
   }
 });
 
