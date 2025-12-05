@@ -36,6 +36,7 @@ import KnowledgeDetail from './components/KnowledgeDetail'; // <--- 引入
 import ManageQuestions from './components/ManageQuestions'; // <--- 引入
 import UserDashboard from './components/UserDashboard'; // <--- 引入
 import SqlDojo from './components/SqlDojo'; // <--- 1. 引入组件
+import SearchKnowledge from './components/SearchKnowledge'; // <--- 引入搜索组件
 
 // --- 简单的统计页面组件 ---
 const StatsView = () => (
@@ -174,6 +175,11 @@ const App = () => {
           {/* 查看笔记详情 */}
           <Route path="/knowledge/:id" element={
             user ? <KnowledgeDetail /> : <Navigate to="/login" replace />
+          } />
+          
+          {/* 新增：搜索知识点路由 */}
+          <Route path="/knowledge/search" element={
+            user ? <SearchKnowledge user={user} /> : <Navigate to="/login" replace />
           } />
           
           {/* 新增：管理题目路由 */}

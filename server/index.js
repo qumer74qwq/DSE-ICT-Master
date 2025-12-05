@@ -467,6 +467,79 @@ app.get('/api/knowledge/detail/:id', async (req, res) => {
   }
 });
 
+// 6. 搜索知识点（按标签、标题或内容）
+app.get('/api/knowledge/search', async (req, res) => {
+  try {
+    const { q, tags, moduleId, userId } = req.query;
+    
+    // 构建查询条件
+    const query = {};
+    
+    // 如果指定了用户ID，只搜索该用户的笔记
+    if (userId) {
+      query.author = userId;
+    }
+    
+    // 如果指定了单元ID
+    if (moduleId) {
+      query.moduleId = moduleId;
+    }
+    
+    // 标签搜索（支持多个标签，逗号分隔）
+    if (tags) {
+      const tagArray = tags.split(',').map(t => t.trim()).filter(t => t);
+      if (tagArray.length > 0) {
+        // 使用正则表达式进行部分匹配和不区分大小写
+        query.tags = { 
+          $in: tagArray.map(tag => new RegExp(tag, 'i'))
+        };
+      }
+    }
+    
+    // 文本搜索（搜索标题或内容）
+    if (q) {
+      query.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { content: { $regex: q, $options: 'i' } },
+        { tags: { $regex: q, $options: 'i' } }
+      ];
+    }
+    
+    const points = await KnowledgePoint.find(query)
+      .populate('author', 'username')
+      .sort({ createdAt: -1 })
+      .limit(100); // 限制返回结果数量
+    
+    res.json(points);
+  } catch (error) {
+    console.error('Search knowledge error:', error);
+    res.status(500).json({ message: '搜索失败' });
+  }
+});
+
+// 7. 获取所有标签（用于搜索建议）
+app.get('/api/knowledge/tags', async (req, res) => {
+  try {
+    // 使用聚合管道获取所有唯一的标签
+    const tagsResult = await KnowledgePoint.aggregate([
+      { $unwind: '$tags' },
+      { $group: { _id: '$tags', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 100 }
+    ]);
+    
+    const tags = tagsResult.map(item => ({
+      tag: item._id,
+      count: item.count
+    }));
+    
+    res.json(tags);
+  } catch (error) {
+    console.error('Get tags error:', error);
+    res.status(500).json({ message: '获取标签失败' });
+  }
+});
+
 // 删除笔记 (完善权限检查)
 app.delete('/api/knowledge/:id', async (req, res) => {
   const { userId } = req.query;
