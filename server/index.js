@@ -468,6 +468,8 @@ app.get('/api/knowledge/detail/:id', async (req, res) => {
 });
 
 // 6. 搜索知识点（按标签、标题或内容）
+// Note: Consider adding rate limiting for production to prevent abuse
+// Example: npm install express-rate-limit
 app.get('/api/knowledge/search', async (req, res) => {
   try {
     const { q, tags, moduleId, userId } = req.query;
@@ -489,7 +491,8 @@ app.get('/api/knowledge/search', async (req, res) => {
     if (tags) {
       const tagArray = tags.split(',').map(t => t.trim()).filter(t => t);
       if (tagArray.length > 0) {
-        // 使用正则表达式进行部分匹配和不区分大小写
+        // MongoDB handles regex compilation efficiently
+        // Using $in with regex for partial matching and case-insensitive search
         query.tags = { 
           $in: tagArray.map(tag => new RegExp(tag, 'i'))
         };

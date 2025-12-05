@@ -111,6 +111,7 @@ async function search(options) {
     }
 
     if (options.tags) {
+      // MongoDB handles regex compilation efficiently
       // Support partial matching with case-insensitive search
       query.tags = {
         $in: options.tags.map(tag => new RegExp(tag, 'i'))

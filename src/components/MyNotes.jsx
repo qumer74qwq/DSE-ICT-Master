@@ -49,20 +49,31 @@ const MyNotes = ({ user }) => {
     // Filter by search query (title, content, or tags)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(note => 
-        note.title.toLowerCase().includes(query) ||
-        note.content.toLowerCase().includes(query) ||
-        (note.tags && note.tags.some(tag => tag.toLowerCase().includes(query)))
-      );
+      filtered = filtered.filter(note => {
+        // Check title and content
+        if (note.title.toLowerCase().includes(query) || 
+            note.content.toLowerCase().includes(query)) {
+          return true;
+        }
+        // Check tags if they exist
+        if (note.tags) {
+          return note.tags.some(tag => tag.toLowerCase().includes(query));
+        }
+        return false;
+      });
     }
 
-    // Filter by selected tags
+    // Filter by selected tags - more efficient with Set
     if (selectedTags.length > 0) {
-      filtered = filtered.filter(note => 
-        note.tags && selectedTags.every(selectedTag => 
-          note.tags.some(tag => tag.toLowerCase().includes(selectedTag.toLowerCase()))
-        )
-      );
+      const selectedTagsLower = new Set(selectedTags.map(t => t.toLowerCase()));
+      filtered = filtered.filter(note => {
+        if (!note.tags) return false;
+        const noteTags = note.tags.map(t => t.toLowerCase());
+        // Check if all selected tags are present in note tags
+        return Array.from(selectedTagsLower).every(selectedTag => 
+          noteTags.some(noteTag => noteTag.includes(selectedTag))
+        );
+      });
     }
 
     setFilteredNotes(filtered);
