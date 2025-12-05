@@ -35,6 +35,9 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
+// --- 添加这一行：配置静态文件服务 ---
+app.use('/uploads', express.static(uploadDir));
+
 // --- Multer 存储配置 (添加这部分代码) ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -628,27 +631,23 @@ app.get('/api/syllabus', (req, res) => {
   res.json(SYLLABUS_DATA);
 });
 
-// 处理图片上传
-const handleImageUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const imageFormData = new FormData();
-  imageFormData.append('image', file);
-
+// ==========================================
+//           ADD THIS NEW ROUTE
+// ==========================================
+// 图片上传路由
+app.post('/api/upload/image', upload.single('image'), (req, res) => {
   try {
-    setLoading(true);
-    // 修改这里：使用相对路径，或者确保端口与后端一致
-    const res = await fetch('/api/upload/image', { 
-      method: 'POST',
-      body: imageFormData
-    });
+    if (!req.file) {
+      return res.status(400).json({ message: '未上传文件' });
+    }
+    // 返回前端可访问的图片 URL
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: imageUrl });
   } catch (error) {
-    console.error('Image upload error:', error);
-  } finally {
-    setLoading(false);
+    console.error('Upload error:', error);
+    res.status(500).json({ message: '图片上传失败' });
   }
-};
+});
 
 // 临时路由：将指定用户升级为管理员
 app.post('/api/admin/promote', async (req, res) => {
@@ -735,3 +734,4 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`后端服务器运行在 http://localhost:${PORT}`);
 });
+

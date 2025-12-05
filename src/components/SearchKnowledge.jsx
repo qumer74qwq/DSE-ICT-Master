@@ -64,6 +64,7 @@ const SearchKnowledge = ({ user }) => {
 
       const res = await fetch(`/api/knowledge/search?${params.toString()}`);
       const data = await res.json();
+      
       setResults(data);
     } catch (error) {
       console.error('Search error:', error);
