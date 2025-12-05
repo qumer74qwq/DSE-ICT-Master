@@ -44,27 +44,27 @@ const SearchKnowledge = ({ user }) => {
 
     try {
       const params = new URLSearchParams();
-      
+
       if (searchQuery.trim()) {
         params.append('q', searchQuery.trim());
       }
-      
+
       if (selectedTags.length > 0) {
         params.append('tags', selectedTags.join(','));
       }
-      
+
       if (selectedModule) {
         params.append('moduleId', selectedModule);
       }
 
-      // Only show user's own notes if not admin
-      if (user && user.role !== 'admin') {
-        params.append('userId', user.id);
-      }
+      // Allow searching all notes (Wiki style)
+      // if (user && user.role !== 'admin') {
+      //   params.append('userId', user.id);
+      // }
 
       const res = await fetch(`/api/knowledge/search?${params.toString()}`);
       const data = await res.json();
-      
+
       setResults(data);
     } catch (error) {
       console.error('Search error:', error);
@@ -74,8 +74,8 @@ const SearchKnowledge = ({ user }) => {
   };
 
   const toggleTag = (tag) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
+    setSelectedTags(prev =>
+      prev.includes(tag)
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
     );
@@ -99,8 +99,8 @@ const SearchKnowledge = ({ user }) => {
     // Escape special regex characters to prevent errors
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
-    return parts.map((part, i) => 
-      part.toLowerCase() === query.toLowerCase() 
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
         ? <mark key={i} className="bg-yellow-200 px-1">{part}</mark>
         : part
     );
@@ -141,7 +141,7 @@ const SearchKnowledge = ({ user }) => {
             <span>進階篩選</span>
             <ChevronDown size={16} className={`transform transition ${showFilters ? 'rotate-180' : ''}`} />
           </button>
-          
+
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
@@ -189,11 +189,10 @@ const SearchKnowledge = ({ user }) => {
                     <button
                       key={tag}
                       onClick={() => toggleTag(tag)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                        selectedTags.includes(tag)
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${selectedTags.includes(tag)
                           ? 'bg-purple-600 text-white shadow-md'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       {tag} <span className="text-xs opacity-70">({count})</span>
                     </button>
@@ -250,11 +249,10 @@ const SearchKnowledge = ({ user }) => {
                         {note.tags && note.tags.map((tag, idx) => (
                           <span
                             key={idx}
-                            className={`text-xs px-2.5 py-1 rounded-md font-medium ${
-                              selectedTags.includes(tag)
+                            className={`text-xs px-2.5 py-1 rounded-md font-medium ${selectedTags.includes(tag)
                                 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300 font-bold'
                                 : 'bg-slate-100 text-slate-600'
-                            }`}
+                              }`}
                           >
                             {tag}
                           </span>

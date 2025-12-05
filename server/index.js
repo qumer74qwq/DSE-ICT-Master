@@ -10,13 +10,13 @@ import { fileURLToPath } from 'url';
 import { seedAdminUser } from './admin.js';
 
 // --- 导入模型 ---
-import { 
-  User, 
-  Question, 
-  UserSetting, 
-  UserAction, 
-  KnowledgePoint, 
-  Module 
+import {
+  User,
+  Question,
+  UserSetting,
+  UserAction,
+  KnowledgePoint,
+  Module
 } from './models.js'; // <--- 新增导入
 
 // 加载环境变量
@@ -56,7 +56,7 @@ const upload = multer({ storage: storage }); // 这里使用了上面定义的 s
 app.use(cors());
 app.use(express.json());
 // 开放静态文件访问，让前端能加载图片
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- MongoDB 连接 ---
 mongoose.connect(process.env.MONGO_URI)
@@ -92,7 +92,7 @@ const seedDatabase = async () => {
       console.log('正在初始化课程数据...');
       const compulsory = INITIAL_SYLLABUS_DATA.compulsory.map(m => ({ ...m, category: 'compulsory' }));
       const electives = INITIAL_SYLLABUS_DATA.electives.map(m => ({ ...m, category: 'elective' }));
-      
+
       await Module.insertMany([...compulsory, ...electives]);
       console.log('课程数据初始化完成');
     }
@@ -140,13 +140,13 @@ const MOCK_DATA = {
 app.get('/api/syllabus', async (req, res) => {
   try {
     const modules = await Module.find({});
-    
+
     // 将扁平的数据库数据转换为前端需要的结构
     const response = {
       compulsory: modules.filter(m => m.category === 'compulsory'),
       electives: modules.filter(m => m.category === 'elective')
     };
-    
+
     res.json(response);
   } catch (error) {
     console.error('Fetch syllabus error:', error);
@@ -376,14 +376,14 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/register', async (req, res) => {
   const { username, password, email } = req.body;
-  
+
   if (!username || !password || !email) {
     return res.status(400).json({ message: '請填寫所有必填欄位' });
   }
 
   try {
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
-    
+
     if (existingUser) {
       if (existingUser.username === username) return res.status(400).json({ message: '用戶名已存在' });
       if (existingUser.email === email) return res.status(400).json({ message: '該郵箱已被註冊' });
@@ -394,10 +394,10 @@ app.post('/api/register', async (req, res) => {
 
     const newUser = new User({ username, email, password: hashedPassword });
     await newUser.save();
-    
+
     // 初始化用户设置
     await new UserSetting({ userId: newUser._id }).save();
-    
+
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ message: '图片上传失败' });
@@ -436,6 +436,82 @@ app.post('/api/knowledge', async (req, res) => {
   }
 });
 
+// 6. 搜索知识点（按标签、标题或内容）
+// Note: Consider adding rate limiting for production to prevent abuse
+// Example: npm install express-rate-limit
+app.get('/api/knowledge/search', async (req, res) => {
+  try {
+    const { q, tags, moduleId, userId } = req.query;
+
+    // 构建查询条件
+    const query = {};
+
+    // 如果指定了用户ID，只搜索该用户的笔记
+    if (userId) {
+      query.author = userId;
+    }
+
+    // 如果指定了单元ID
+    if (moduleId) {
+      query.moduleId = moduleId;
+    }
+
+    // 标签搜索（支持多个标签，逗号分隔）
+    if (tags) {
+      const tagArray = tags.split(',').map(t => t.trim()).filter(t => t);
+      if (tagArray.length > 0) {
+        // MongoDB handles regex compilation efficiently
+        // Using $in with regex for partial matching and case-insensitive search
+        query.tags = {
+          $in: tagArray.map(tag => new RegExp(tag, 'i'))
+        };
+      }
+    }
+
+    // 文本搜索（搜索标题或内容）
+    if (q) {
+      query.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { content: { $regex: q, $options: 'i' } },
+        { tags: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    const points = await KnowledgePoint.find(query)
+      .populate('author', 'username')
+      .sort({ createdAt: -1 })
+      .limit(100); // 限制返回结果数量
+
+    res.json(points);
+  } catch (error) {
+    console.error('Search knowledge error:', error);
+    res.status(500).json({ message: '搜索失败' });
+  }
+});
+
+// 7. 获取所有标签（用于搜索建议）
+app.get('/api/knowledge/tags', async (req, res) => {
+  try {
+    // 使用聚合管道获取所有唯一的标签
+    const tagsResult = await KnowledgePoint.aggregate([
+      { $unwind: '$tags' },
+      { $group: { _id: '$tags', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 100 }
+    ]);
+
+    const tags = tagsResult.map(item => ({
+      tag: item._id,
+      count: item.count
+    }));
+
+    res.json(tags);
+  } catch (error) {
+    console.error('Get tags error:', error);
+    res.status(500).json({ message: '获取标签失败' });
+  }
+});
+
 // 3. 获取某单元的知识点
 app.get('/api/knowledge/:moduleId', async (req, res) => {
   try {
@@ -470,81 +546,9 @@ app.get('/api/knowledge/detail/:id', async (req, res) => {
   }
 });
 
-// 6. 搜索知识点（按标签、标题或内容）
-// Note: Consider adding rate limiting for production to prevent abuse
-// Example: npm install express-rate-limit
-app.get('/api/knowledge/search', async (req, res) => {
-  try {
-    const { q, tags, moduleId, userId } = req.query;
-    
-    // 构建查询条件
-    const query = {};
-    
-    // 如果指定了用户ID，只搜索该用户的笔记
-    if (userId) {
-      query.author = userId;
-    }
-    
-    // 如果指定了单元ID
-    if (moduleId) {
-      query.moduleId = moduleId;
-    }
-    
-    // 标签搜索（支持多个标签，逗号分隔）
-    if (tags) {
-      const tagArray = tags.split(',').map(t => t.trim()).filter(t => t);
-      if (tagArray.length > 0) {
-        // MongoDB handles regex compilation efficiently
-        // Using $in with regex for partial matching and case-insensitive search
-        query.tags = { 
-          $in: tagArray.map(tag => new RegExp(tag, 'i'))
-        };
-      }
-    }
-    
-    // 文本搜索（搜索标题或内容）
-    if (q) {
-      query.$or = [
-        { title: { $regex: q, $options: 'i' } },
-        { content: { $regex: q, $options: 'i' } },
-        { tags: { $regex: q, $options: 'i' } }
-      ];
-    }
-    
-    const points = await KnowledgePoint.find(query)
-      .populate('author', 'username')
-      .sort({ createdAt: -1 })
-      .limit(100); // 限制返回结果数量
-    
-    res.json(points);
-  } catch (error) {
-    console.error('Search knowledge error:', error);
-    res.status(500).json({ message: '搜索失败' });
-  }
-});
 
-// 7. 获取所有标签（用于搜索建议）
-app.get('/api/knowledge/tags', async (req, res) => {
-  try {
-    // 使用聚合管道获取所有唯一的标签
-    const tagsResult = await KnowledgePoint.aggregate([
-      { $unwind: '$tags' },
-      { $group: { _id: '$tags', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 100 }
-    ]);
-    
-    const tags = tagsResult.map(item => ({
-      tag: item._id,
-      count: item.count
-    }));
-    
-    res.json(tags);
-  } catch (error) {
-    console.error('Get tags error:', error);
-    res.status(500).json({ message: '获取标签失败' });
-  }
-});
+
+
 
 // 删除笔记 (完善权限检查)
 app.delete('/api/knowledge/:id', async (req, res) => {
@@ -559,7 +563,7 @@ app.delete('/api/knowledge/:id', async (req, res) => {
 
     // 兼容不同的字段名 (userId, author, createdBy)
     const noteOwnerId = note.userId || note.author || note.createdBy;
-    
+
     const isOwner = noteOwnerId && noteOwnerId.toString() === userId;
     const isAdmin = user.role === 'admin';
 
@@ -582,11 +586,11 @@ app.get('/api/stats/:userId', async (req, res) => {
 
     // 使用聚合管道计算统计数据
     const stats = await UserAction.aggregate([
-      { 
-        $match: { 
-          userId: userId, 
+      {
+        $match: {
+          userId: userId,
           actionType: 'QUIZ_COMPLETE' // 只统计完成的测验
-        } 
+        }
       },
       {
         $group: {
@@ -653,7 +657,7 @@ app.post('/api/upload/image', upload.single('image'), (req, res) => {
 app.post('/api/admin/promote', async (req, res) => {
   const { username, secretKey } = req.body;
   if (secretKey !== process.env.SECRET_KEY) return res.status(403).json({ message: 'Forbidden' });
-  
+
   try {
     const user = await User.findOneAndUpdate({ username }, { role: 'admin' }, { new: true });
     res.json({ success: true, user });
@@ -670,7 +674,7 @@ app.post('/api/admin/promote', async (req, res) => {
 const verifyAdmin = async (req, res, next) => {
   const userId = req.query.userId || req.body.userId;
   if (!userId) return res.status(401).json({ message: '未提供用户ID' });
-  
+
   try {
     const user = await User.findById(userId);
     if (user && user.role === 'admin') {
